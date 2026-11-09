@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Multi-Documento de Consulta Pública - NO-NOR-FOR-008</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SheetJS for Excel export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- jsPDF and html2pdf for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        corporate: {
+                            dark: '#0f2744',
+                            DEFAULT: '#1b3b6f',
+                            light: '#325d94',
+                            accent: '#f97316',
+                            accentHover: '#ea580c',
+                            surface: '#f8fafc'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; }
+        }
+    </style>
+</head>
+<body class="bg-corporate-surface text-slate-800 min-h-screen flex flex-col">
+
+    <!-- Notificación emergente estilo toast -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-32 opacity-0 transition-all duration-300 max-w-md bg-white border-l-4 border-corporate-accent shadow-xl rounded-r-lg p-4 flex items-center space-x-3">
+        <div id="toast-icon" class="text-corporate-accent text-xl"><i class="fa-solid fa-circle-check"></i></div>
+        <div>
+            <h4 id="toast-title" class="font-bold text-sm text-slate-900">Notificación</h4>
+            <p id="toast-msg" class="text-xs text-slate-600">Mensaje del sistema.</p>
+        </div>
+    </div>
+
+    <!-- Header Institucional -->
+    <header class="bg-corporate-dark text-white shadow-md no-print sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-corporate-accent p-2.5 rounded-lg text-white shadow-inner">
+                    <i class="fa-solid fa-file-shield text-xl"></i>
+                </div>
+                <div>
+                    <span class="text-xs tracking-wider uppercase text-corporate-accent font-semibold">Sistema de Normalización</span>
+                    <h1 class="text-lg font-bold">Consulta Pública de Normas (NO-NOR-FOR-008)</h1>
+                </div>
+            </div>
+            
+            <!-- Selector de Vistas -->
+            <div class="flex items-center bg-corporate/60 p-1.5 rounded-xl border border-corporate-light/30">
+                <button onclick="switchView('citizen')" id="btn-citizen" class="px-4 py-2 text-xs md:text-sm font-semibold rounded-lg transition-all flex items-center space-x-2 bg-corporate-accent text-white shadow">
+                    <i class="fa-solid fa-user-pen"></i>
+                    <span>Vista Ciudadano</span>
+                </button>
+                <button onclick="switchView('admin')" id="btn-admin" class="px-4 py-2 text-xs md:text-sm font-semibold rounded-lg transition-all flex items-center space-x-2 text-slate-300 hover:text-white">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Gestión Coordinación</span>
+                    <span id="badge-admin-count" class="bg-corporate-accent text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1">0</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Contenido Principal -->
+    <main class="flex-grow max-w-7xl w-full mx-auto p-4 md:p-6">
+
+        <!-- ==================== VISTA CIUDADANO ==================== -->
+        <section id="view-citizen" class="space-y-6">
+            <!-- Banner & Selector de Documento Normativo Activo -->
+            <div class="bg-white border-l-4 border-corporate-accent shadow-sm rounded-xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div class="flex-grow">
+                    <span class="text-xs font-semibold text-corporate uppercase tracking-wider">Documento Activo en Consulta</span>
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-3 mt-1">
+                        <select id="citizen-doc-selector" onchange="changeActiveDocumentCitizen(this.value)" class="bg-slate-50 border border-slate-300 font-bold text-slate-900 text-sm md:text-base rounded-lg px-3 py-2 focus:ring-2 focus:ring-corporate-light focus:outline-none">
+                            <!-- Opciones cargadas dinámicamente -->
+                        </select>
+                        <span id="citizen-doc-code" class="inline-block bg-corporate/10 text-corporate font-mono font-bold text-xs px-2.5 py-1 rounded-md w-fit">
+                            COD: ---
+                        </span>
+                    </div>
+                    <p id="citizen-doc-desc" class="text-xs text-slate-600 mt-2">Seleccione el borrador normativo sobre el cual desea emitir observaciones técnicas.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="document.getElementById('normative-doc-section').scrollIntoView({behavior: 'smooth'})" class="bg-corporate/10 text-corporate hover:bg-corporate/20 text-xs font-semibold px-4 py-2.5 rounded-lg transition">
+                        <i class="fa-solid fa-book-open mr-1.5"></i> Ver Borrador
+                    </button>
+                    <button onclick="resetCitizenForm()" class="bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs font-semibold px-3 py-2.5 rounded-lg transition" title="Limpiar formulario">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Grid Principal: Visor PDF y Formulario -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Visor del Documento Normativo (Izquierda - 5 cols) -->
+                <div id="normative-doc-section" class="lg:col-span-5 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[750px]">
+                    <div class="bg-corporate-dark text-white px-4 py-3 flex justify-between items-center">
+                        <div class="flex items-center space-x-2 overflow-hidden">
+                            <i class="fa-solid fa-file-pdf text-corporate-accent flex-shrink-0"></i>
+                            <span class="font-semibold text-xs md:text-sm truncate" id="doc-title-display">Cargando borrador...</span>
+                        </div>
+                        <a id="btn-download-pdf-src" href="#" target="_blank" class="bg-corporate-accent hover:bg-corporate-accentHover text-white text-xs px-3 py-1.5 rounded-lg font-medium transition flex items-center space-x-1 shadow-sm flex-shrink-0">
+                            <i class="fa-solid fa-download"></i>
+                            <span>Descargar</span>
+                        </a>
+                    </div>
+                    <!-- Visor incrustado -->
+                    <div class="flex-grow bg-slate-100 relative">
+                        <iframe id="pdf-viewer-frame" src="about:blank" class="w-full h-full border-0"></iframe>
+                    </div>
+                    <div class="p-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex justify-between items-center">
+                        <span>Consulte el documento mientras llena la planilla.</span>
+                        <span class="font-semibold text-corporate">Formato NO-NOR-FOR-008</span>
+                    </div>
+                </div>
+
+                <!-- Formulario de Participación (Derecha - 7 cols) -->
+                <div class="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
+                    <form id="submission-form" onsubmit="handleFormSubmit(event)" class="space-y-6">
+                        
+                        <!-- Sección Datos del Emisor -->
+                        <div>
+                            <div class="flex items-center justify-between border-b border-slate-200 pb-2 mb-4">
+                                <h3 class="font-bold text-corporate-dark flex items-center gap-2">
+                                    <i class="fa-solid fa-user-shield text-corporate-accent"></i>
+                                    Datos del Emisor de la Observación
+                                </h3>
+                                <span class="text-xs text-slate-400">* Campos obligatorios</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Nombre y Apellido *</label>
+                                    <input type="text" id="issuer-name" required placeholder="Ej. Ing. Carlos Mendoza" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-corporate-light">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Cédula de Identidad *</label>
+                                    <input type="text" id="issuer-id" required placeholder="Ej. V-15678901" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-corporate-light">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Profesión y Ocupación *</label>
+                                    <input type="text" id="issuer-profession" required placeholder="Ej. Especialista en Calidad" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-corporate-light">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Correo Electrónico *</label>
+                                    <input type="email" id="issuer-email" required placeholder="ejemplo@organizacion.org" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-corporate-light">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Teléfono Móvil *</label>
+                                    <input type="tel" id="issuer-phone" required placeholder="Ej. +58 412-5551234" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-corporate-light">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Organización (si aplica)</label>
+                                    <input type="text" id="issuer-org" placeholder="Ej. Instituto de Ensayos Técnicos" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-corporate-light">
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-xs font-semibold text-slate-700 mb-1">Cargo en la Organización (si aplica)</label>
+                                    <input type="text" id="issuer-cargo" placeholder="Ej. Jefe de Normalización e Inspección" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-corporate-light">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sección Tabla de Observaciones (Formato NO-NOR-FOR-008) -->
+                        <div>
+                            <div class="flex items-center justify-between border-b border-slate-200 pb-2 mb-3">
+                                <h3 class="font-bold text-corporate-dark flex items-center gap-2">
+                                    <i class="fa-solid fa-list-check text-corporate-accent"></i>
+                                    Información de la Observación (NO-NOR-FOR-008)
+                                </h3>
+                                <button type="button" onclick="addObservationRow()" class="bg-corporate hover:bg-corporate-light text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition flex items-center space-x-1 shadow-sm">
+                                    <i class="fa-solid fa-plus"></i>
+                                    <span>Agregar Fila</span>
+                                </button>
+                            </div>
+
+                            <!-- Contenedor de la tabla interactiva -->
+                            <div class="border border-slate-200 rounded-xl overflow-hidden shadow-inner bg-slate-50">
+                                <div class="overflow-x-auto custom-scrollbar max-h-96">
+                                    <table id="observations-table" class="w-full text-left border-collapse text-xs">
+                                        <thead class="bg-corporate-dark text-white sticky top-0 z-10">
+                                            <tr>
+                                                <th class="p-2.5 w-16"># Apartado</th>
+                                                <th class="p-2.5 w-16">Página</th>
+                                                <th class="p-2.5 w-44">Texto Original</th>
+                                                <th class="p-2.5 w-44">Texto Propuesto</th>
+                                                <th class="p-2.5 w-48">Justificación</th>
+                                                <th class="p-2.5 w-12 text-center">Acción</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="obs-tbody" class="divide-y divide-slate-200 bg-white">
+                                            <!-- Filas dinámicas -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div id="empty-obs-message" class="p-6 text-center text-slate-400 text-xs">
+                                    <i class="fa-solid fa-clipboard-list text-2xl mb-1 block"></i>
+                                    No hay observaciones ingresadas. Presione "+ Agregar Fila".
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Botones de Acción -->
+                        <div class="pt-4 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <p class="text-xs text-slate-500 text-center sm:text-left">
+                                Sus comentarios se consolidarán automáticamente en el expediente oficial del anteproyecto.
+                            </p>
+                            <div class="flex items-center gap-3 w-full sm:w-auto">
+                                <button type="button" onclick="previewFormalDocument()" class="flex-1 sm:flex-none bg-slate-100 hover:bg-slate-200 text-corporate font-semibold text-xs px-4 py-3 rounded-xl transition flex items-center justify-center space-x-2">
+                                    <i class="fa-solid fa-eye"></i>
+                                    <span>Vista Previa</span>
+                                </button>
+                                <button type="submit" class="flex-1 sm:flex-none bg-corporate-accent hover:bg-corporate-accentHover text-white font-semibold text-xs px-6 py-3 rounded-xl shadow-md transition flex items-center justify-center space-x-2">
+                                    <i class="fa-solid fa-paper-plane"></i>
+                                    <span>Enviar Observaciones</span>
+                                </button>
+                            </div>
+                        </div>
+
+                    </form>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ==================== VISTA GESTIÓN COORDINADOR / MULTIDOCUMENTO ==================== -->
+        <section id="view-admin" class="space-y-6 hidden">
+            
+            <!-- Pestañas de Navegación del Administrador -->
+            <div class="flex border-b border-slate-200 space-x-4 bg-white px-4 pt-3 rounded-t-xl">
+                <button onclick="switchAdminTab('documents')" id="tab-btn-docs" class="pb-3 px-4 text-xs font-bold border-b-2 border-corporate-accent text-corporate-accent flex items-center space-x-2">
+                    <i class="fa-solid fa-folder-tree"></i>
+                    <span>1. Administración de Anteproyectos</span>
+                </button>
+                <button onclick="switchAdminTab('observations')" id="tab-btn-obs" class="pb-3 px-4 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-corporate flex items-center space-x-2">
+                    <i class="fa-solid fa-comments"></i>
+                    <span>2. Consolidado de Observaciones Recibidas</span>
+                </button>
+            </div>
+
+            <!-- TAB 1: Gestión de Anteproyectos Normativos -->
+            <div id="admin-tab-documents" class="space-y-6">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <!-- Formulario de Creación / Edición de Anteproyecto (5 cols) -->
+                    <div class="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <div class="border-b border-slate-200 pb-3 flex justify-between items-center">
+                            <h3 id="doc-form-title" class="font-bold text-corporate-dark flex items-center gap-2">
+                                <i class="fa-solid fa-file-circle-plus text-corporate-accent"></i>
+                                Crear Nuevo Anteproyecto Normativo
+                            </h3>
+                            <button id="btn-cancel-doc-edit" onclick="resetDocForm()" class="text-xs text-slate-400 hover:text-slate-600 hidden">Cancelar</button>
+                        </div>
+
+                        <form id="doc-manage-form" onsubmit="handleSaveDocument(event)" class="space-y-4 text-xs">
+                            <input type="hidden" id="doc-edit-id" value="">
+                            <div>
+                                <label class="block font-semibold text-slate-700 mb-1">Código / Referencia Normativa *</label>
+                                <input type="text" id="doc-code-input" required placeholder="Ej. NOR-2026-COVENIN-045" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-corporate-light">
+                            </div>
+                            <div>
+                                <label class="block font-semibold text-slate-700 mb-1">Título del Anteproyecto *</label>
+                                <input type="text" id="doc-title-input" required placeholder="Ej. Norma de Ensayo de Granulometría en Agregados" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-corporate-light">
+                            </div>
+                            <div>
+                                <label class="block font-semibold text-slate-700 mb-1">Descripción / Alcance</label>
+                                <textarea id="doc-desc-input" rows="2" placeholder="Resumen del documento sometido a consulta pública..." class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-corporate-light"></textarea>
+                            </div>
+                            <div>
+                                <label class="block font-semibold text-slate-700 mb-1">Origen del Documento PDF *</label>
+                                <div class="space-y-2">
+                                    <input type="text" id="doc-url-input" placeholder="Enlace URL público (https://.../documento.pdf)" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-corporate-light">
+                                    <div class="flex items-center space-x-2">
+                                        <span class="text-slate-400 font-bold">o subir local:</span>
+                                        <input type="file" id="doc-file-input" accept="application/pdf" onchange="handleFileUpload(event)" class="text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-corporate/10 file:text-corporate hover:file:bg-corporate/20">
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block font-semibold text-slate-700 mb-1">Estado de la Consulta</label>
+                                <select id="doc-status-input" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-corporate-light font-medium">
+                                    <option value="Activo">Activo (Abierto a observaciones)</option>
+                                    <option value="Archivado">Archivado (Cerrado / Solo lectura)</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="w-full bg-corporate hover:bg-corporate-light text-white font-bold py-2.5 rounded-xl transition shadow-md flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-floppy-disk"></i>
+                                <span>Guardar Anteproyecto</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Lista de Anteproyectos Registrados (7 cols) -->
+                    <div class="lg:col-span-7 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <div class="border-b border-slate-200 pb-3 flex justify-between items-center">
+                            <h3 class="font-bold text-corporate-dark flex items-center gap-2">
+                                <i class="fa-solid fa-folder-open text-corporate-accent"></i>
+                                Catálogo de Anteproyectos en Sistema
+                            </h3>
+                            <span id="doc-count-tag" class="bg-corporate/10 text-corporate text-xs font-bold px-2.5 py-1 rounded-full">0 Documentos</span>
+                        </div>
+
+                        <div class="overflow-x-auto custom-scrollbar">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead class="bg-corporate-dark text-white">
+                                    <tr>
+                                        <th class="p-3">Código & Título</th>
+                                        <th class="p-3 text-center">Estado</th>
+                                        <th class="p-3 text-center">Observaciones</th>
+                                        <th class="p-3 text-center">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-docs-tbody" class="divide-y divide-slate-200">
+                                    <!-- Filas cargadas dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: Consolidado de Observaciones -->
+            <div id="admin-tab-observations" class="space-y-6 hidden">
+                <!-- Filtros y Exportación -->
+                <div class="bg-white border-l-4 border-corporate shadow-sm rounded-xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div class="space-y-1">
+                        <h3 class="font-bold text-corporate-dark text-base">Respuestas Recopiladas por Anteproyecto</h3>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs text-slate-500 font-semibold">Filtrar por Documento:</span>
+                            <select id="admin-filter-doc" onchange="renderAdminObservationsTable()" class="bg-slate-50 border border-slate-300 font-semibold text-xs text-slate-800 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-corporate">
+                                <option value="ALL">-- Mostrar Todos los Anteproyectos --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="exportAllToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2.5 rounded-lg transition flex items-center space-x-2 shadow-sm">
+                            <i class="fa-solid fa-file-excel"></i>
+                            <span>Excel (.xlsx)</span>
+                        </button>
+                        <button onclick="exportAllToPDF()" class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-4 py-2.5 rounded-lg transition flex items-center space-x-2 shadow-sm">
+                            <i class="fa-solid fa-file-pdf"></i>
+                            <span>PDF Consolidado</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tarjetas Estadísticas de Respuestas -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center space-x-4">
+                        <div class="bg-corporate/10 text-corporate p-3 rounded-xl text-xl">
+                            <i class="fa-solid fa-users"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-500 font-medium">Participantes</p>
+                            <h3 id="stat-total-issuers" class="text-2xl font-bold text-corporate-dark">0</h3>
+                        </div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center space-x-4">
+                        <div class="bg-corporate-accent/10 text-corporate-accent p-3 rounded-xl text-xl">
+                            <i class="fa-solid fa-comments"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-500 font-medium">Total Observaciones</p>
+                            <h3 id="stat-total-obs" class="text-2xl font-bold text-corporate-dark">0</h3>
+                        </div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center space-x-4">
+                        <div class="bg-emerald-500/10 text-emerald-600 p-3 rounded-xl text-xl">
+                            <i class="fa-solid fa-building"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-500 font-medium">Organizaciones</p>
+                            <h3 id="stat-total-orgs" class="text-2xl font-bold text-corporate-dark">0</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabla de Observaciones Registradas -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-3 bg-slate-50">
+                        <div class="flex items-center space-x-2 w-full sm:w-72">
+                            <span class="text-slate-400 text-xs"><i class="fa-solid fa-magnifying-glass"></i></span>
+                            <input type="text" id="admin-search" onkeyup="renderAdminObservationsTable()" placeholder="Buscar por emisor, cédula u organización..." class="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-corporate-light">
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead class="bg-corporate-dark text-white">
+                                <tr>
+                                    <th class="p-3">Anteproyecto / Fecha</th>
+                                    <th class="p-3">Emisor & Contacto</th>
+                                    <th class="p-3">Organización / Cargo</th>
+                                    <th class="p-3 text-center">N° Obs.</th>
+                                    <th class="p-3 text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-tbody" class="divide-y divide-slate-200">
+                                <!-- Filas de envíos -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="empty-admin-message" class="p-12 text-center text-slate-400 text-xs hidden">
+                        <i class="fa-solid fa-folder-open text-3xl mb-2 block"></i>
+                        No se encontraron observaciones para el filtro seleccionado.
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Modal de Vista Previa / Detalle Institucional (NO-NOR-FOR-008) -->
+    <div id="preview-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+            <!-- Modal Header -->
+            <div class="bg-corporate-dark text-white px-6 py-4 flex justify-between items-center">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-file-lines text-corporate-accent"></i>
+                    <h3 class="font-bold text-sm">Formato Oficial NO-NOR-FOR-008 - Vista Previa</h3>
+                </div>
+                <button onclick="closePreviewModal()" class="text-slate-300 hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div id="printable-form-container" class="p-6 md:p-8 overflow-y-auto custom-scrollbar bg-slate-50 flex-grow space-y-6 text-slate-800 text-xs">
+                
+                <!-- Encabezado Institucional -->
+                <div class="border-2 border-corporate-dark rounded-xl bg-white p-4 space-y-4 shadow-sm">
+                    <div class="flex justify-between items-center border-b border-corporate-dark pb-3">
+                        <div>
+                            <h4 class="font-bold text-sm text-corporate-dark uppercase">FONDONORMA / COMITÉ DE NORMALIZACIÓN</h4>
+                            <p class="text-[10px] text-slate-500">FORMULARIO DE OBSERVACIONES DE CONSULTA PÚBLICA</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="bg-corporate text-white font-mono px-2 py-1 rounded text-[10px]">NO-NOR-FOR-008</span>
+                            <p id="preview-date" class="text-[10px] text-slate-500 mt-1">Fecha: --/--/----</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                        <div><strong class="text-corporate-dark">ANTEPROYECTO:</strong> <span id="prev-doc-title">-</span></div>
+                        <div><strong class="text-corporate-dark">CÓDIGO:</strong> <span id="prev-doc-code" class="font-mono text-corporate font-bold">-</span></div>
+                    </div>
+                </div>
+
+                <!-- Datos del Emisor -->
+                <div class="border border-slate-300 rounded-xl bg-white overflow-hidden shadow-sm">
+                    <div class="bg-corporate text-white px-4 py-2 font-bold text-xs uppercase tracking-wide">
+                        DATOS DEL EMISOR DE LA OBSERVACIÓN
+                    </div>
+                    <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div><span class="font-semibold text-slate-500">Nombre y Apellido:</span> <span id="prev-name" class="font-medium text-slate-900">-</span></div>
+                        <div><span class="font-semibold text-slate-500">Cédula de Identidad:</span> <span id="prev-id" class="font-medium text-slate-900">-</span></div>
+                        <div><span class="font-semibold text-slate-500">Profesión y Ocupación:</span> <span id="prev-prof" class="font-medium text-slate-900">-</span></div>
+                        <div><span class="font-semibold text-slate-500">Correo Electrónico:</span> <span id="prev-email" class="font-medium text-slate-900">-</span></div>
+                        <div><span class="font-semibold text-slate-500">Teléfono Móvil:</span> <span id="prev-phone" class="font-medium text-slate-900">-</span></div>
+                        <div><span class="font-semibold text-slate-500">Organización:</span> <span id="prev-org" class="font-medium text-slate-900">-</span></div>
+                        <div class="md:col-span-2"><span class="font-semibold text-slate-500">Cargo en la Organización:</span> <span id="prev-cargo" class="font-medium text-slate-900">-</span></div>
+                    </div>
+                </div>
+
+                <!-- Tabla de Observaciones en el Formato -->
+                <div class="border border-slate-300 rounded-xl bg-white overflow-hidden shadow-sm">
+                    <div class="bg-corporate text-white px-4 py-2 font-bold text-xs uppercase tracking-wide">
+                        INFORMACIÓN DE LA OBSERVACIÓN
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead class="bg-slate-100 text-slate-700 border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2 w-16 border-r border-slate-200"># Apartado</th>
+                                    <th class="p-2 w-16 border-r border-slate-200">Página</th>
+                                    <th class="p-2 w-44 border-r border-slate-200">Texto Original</th>
+                                    <th class="p-2 w-44 border-r border-slate-200">Texto Propuesto</th>
+                                    <th class="p-2">Justificación</th>
+                                </tr>
+                            </thead>
+                            <tbody id="prev-obs-tbody" class="divide-y divide-slate-200">
+                                <!-- Llenado dinámico -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="text-[10px] text-slate-500 text-center italic bg-white p-3 rounded-xl border border-slate-200">
+                    Una vez rellenado, el formulario debe ser enviado en formato .PDF al siguiente correo electrónico: normalizacion@fondonorma.org.ve.
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-white px-6 py-3 border-t border-slate-200 flex justify-end gap-3 no-print">
+                <button onclick="closePreviewModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs px-4 py-2.5 rounded-lg transition">
+                    Cerrar
+                </button>
+                <button onclick="downloadFormPDF()" class="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs px-4 py-2.5 rounded-lg transition flex items-center space-x-1.5 shadow-sm">
+                    <i class="fa-solid fa-file-pdf"></i>
+                    <span>Descargar PDF</span>
+                </button>
+                <button onclick="downloadFormWordSimulation()" class="bg-corporate hover:bg-corporate-light text-white font-semibold text-xs px-4 py-2.5 rounded-lg transition flex items-center space-x-1.5 shadow-sm">
+                    <i class="fa-solid fa-file-word"></i>
+                    <span>Descargar Word (.doc)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Corporativo -->
+    <footer class="bg-white border-t border-slate-200 py-4 px-6 text-center text-xs text-slate-500 mt-auto no-print">
+        <p>Plataforma Multi-Documento de Consulta Pública Normativa &bull; Estándar NO-NOR-FOR-008 &bull; &copy; 2026</p>
+    </footer>
+
+    <!-- Lógica JavaScript Interactiva -->
+    <script>
+        // Datos iniciales de anteproyectos (Multi-documento)
+        const defaultDocuments = [
+            {
+                id: 'doc_1',
+                code: 'NOR-2026-COVENIN-045',
+                title: 'Anteproyecto de Norma Técnica de Ensayos en Materiales',
+                desc: 'Especificaciones técnicas para el control de calidad en infraestructura vial.',
+                pdfUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+                status: 'Activo'
+            },
+            {
+                id: 'doc_2',
+                code: 'NOR-2026-COVENIN-102',
+                title: 'Reglamento de Seguridad e Higiene en Laboratorios',
+                desc: 'Procedimientos normativos de bioseguridad y gestión de residuos.',
+                pdfUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+                status: 'Activo'
+            }
+        ];
+
+        // Inicializar Estado de la Aplicación en localStorage
+        let documents = JSON.parse(localStorage.getItem('fondonorma_docs')) || defaultDocuments;
+        let submissions = JSON.parse(localStorage.getItem('fondonorma_submissions')) || [];
+        let currentActiveDocId = localStorage.getItem('fondonorma_active_doc_id') || (documents[0] ? documents[0].id : '');
+
+        let tempUploadedPdfBase64 = null; // Almacenamiento temporal para archivo subido por coordinador
+
+        window.onload = function() {
+            addObservationRow();
+            renderCitizenDocSelector();
+            renderAdminDocsTable();
+            renderAdminObservationsTable();
+            updateAdminBadge();
+        };
+
+        // ================= SISTEMA DE MULTI-DOCUMENTOS =================
+
+        function renderCitizenDocSelector() {
+            const selector = document.getElementById('citizen-doc-selector');
+            selector.innerHTML = '';
+
+            const activeDocs = documents.filter(d => d.status === 'Activo');
+
+            if (activeDocs.length === 0) {
+                selector.innerHTML = '<option value="">No hay anteproyectos activos</option>';
+                setCitizenActiveDoc(null);
+                return;
+            }
+
+            activeDocs.forEach(doc => {
+                const opt = document.createElement('option');
+                opt.value = doc.id;
+                opt.innerText = `${doc.code} - ${doc.title}`;
+                if (doc.id === currentActiveDocId) opt.selected = true;
+                selector.appendChild(opt);
+            });
+
+            // Si el seleccionado no está entre los activos, tomar el primero
+            if (!activeDocs.some(d => d.id === currentActiveDocId)) {
+                currentActiveDocId = activeDocs[0].id;
+            }
+
+            const docObj = documents.find(d => d.id === currentActiveDocId);
+            setCitizenActiveDoc(docObj);
+        }
+
+        function changeActiveDocumentCitizen(docId) {
+            currentActiveDocId = docId;
+            localStorage.setItem('fondonorma_active_doc_id', docId);
+            const docObj = documents.find(d => d.id === docId);
+            setCitizenActiveDoc(docObj);
+        }
+
+        function setCitizenActiveDoc(doc) {
+            if (!doc) {
+                document.getElementById('doc-title-display').innerText = "Sin anteproyecto activo";
+                document.getElementById('citizen-doc-code').innerText = "COD: ---";
+                document.getElementById('citizen-doc-desc').innerText = "En este momento no hay borrador abierto para consulta pública.";
+                document.getElementById('pdf-viewer-frame').src = "about:blank";
+                document.getElementById('btn-download-pdf-src').href = "#";
+                return;
+            }
+
+            document.getElementById('doc-title-display').innerText = doc.title;
+            document.getElementById('citizen-doc-code').innerText = "COD: " + doc.code;
+            document.getElementById('citizen-doc-desc').innerText = doc.desc || 'Sin descripción detallada.';
+            document.getElementById('pdf-viewer-frame').src = doc.pdfUrl + "#toolbar=0";
+            document.getElementById('btn-download-pdf-src').href = doc.pdfUrl;
+        }
+
+        // ================= GESTIÓN DEL COORDINADOR (ADMIN) =================
+
+        function switchAdminTab(tab) {
+            const btnDocs = document.getElementById('tab-btn-docs');
+            const btnObs = document.getElementById('tab-btn-obs');
+            const tabDocs = document.getElementById('admin-tab-documents');
+            const tabObs = document.getElementById('admin-tab-observations');
+
+            if (tab === 'documents') {
+                btnDocs.className = "pb-3 px-4 text-xs font-bold border-b-2 border-corporate-accent text-corporate-accent flex items-center space-x-2";
+                btnObs.className = "pb-3 px-4 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-corporate flex items-center space-x-2";
+                tabDocs.classList.remove('hidden');
+                tabObs.classList.add('hidden');
+            } else {
+                btnObs.className = "pb-3 px-4 text-xs font-bold border-b-2 border-corporate-accent text-corporate-accent flex items-center space-x-2";
+                btnDocs.className = "pb-3 px-4 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-corporate flex items-center space-x-2";
+                tabObs.classList.remove('hidden');
+                tabDocs.classList.add('hidden');
+                renderAdminObservationsTable();
+            }
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                if (file.type !== 'application/pdf') {
+                    showToast("Archivo no válido", "Por favor seleccione un archivo en formato PDF.", "error");
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    tempUploadedPdfBase64 = e.target.result;
+                    showToast("PDF Cargado", "Archivo listo para ser guardado.", "success");
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function handleSaveDocument(event) {
+            event.preventDefault();
+
+            const editId = document.getElementById('doc-edit-id').value;
+            const code = document.getElementById('doc-code-input').value.trim();
+            const title = document.getElementById('doc-title-input').value.trim();
+            const desc = document.getElementById('doc-desc-input').value.trim();
+            const urlInput = document.getElementById('doc-url-input').value.trim();
+            const status = document.getElementById('doc-status-input').value;
+
+            let finalPdfUrl = tempUploadedPdfBase64 || urlInput || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
+
+            if (editId) {
+                // Editar existente
+                const index = documents.findIndex(d => d.id === editId);
+                if (index !== -1) {
+                    documents[index].code = code;
+                    documents[index].title = title;
+                    documents[index].desc = desc;
+                    if (tempUploadedPdfBase64 || urlInput) documents[index].pdfUrl = finalPdfUrl;
+                    documents[index].status = status;
+                    showToast("Actualizado", "Anteproyecto modificado exitosamente.", "success");
+                }
+            } else {
+                // Crear nuevo
+                const newDoc = {
+                    id: 'doc_' + Date.now(),
+                    code,
+                    title,
+                    desc,
+                    pdfUrl: finalPdfUrl,
+                    status
+                };
+                documents.push(newDoc);
+                showToast("Creado", "Nuevo anteproyecto agregado a la consulta pública.", "success");
+            }
+
+            localStorage.setItem('fondonorma_docs', JSON.stringify(documents));
+            resetDocForm();
+            renderAdminDocsTable();
+            renderCitizenDocSelector();
+        }
+
+        function resetDocForm() {
+            document.getElementById('doc-manage-form').reset();
+            document.getElementById('doc-edit-id').value = '';
+            document.getElementById('doc-form-title').innerHTML = '<i class="fa-solid fa-file-circle-plus text-corporate-accent"></i> Crear Nuevo Anteproyecto Normativo';
+            document.getElementById('btn-cancel-doc-edit').classList.add('hidden');
+            tempUploadedPdfBase64 = null;
+        }
+
+        function editDocument(docId) {
+            const doc = documents.find(d => d.id === docId);
+            if (!doc) return;
+
+            document.getElementById('doc-edit-id').value = doc.id;
+            document.getElementById('doc-code-input').value = doc.code;
+            document.getElementById('doc-title-input').value = doc.title;
+            document.getElementById('doc-desc-input').value = doc.desc || '';
+            document.getElementById('doc-url-input').value = doc.pdfUrl.startsWith('data:') ? '' : doc.pdfUrl;
+            document.getElementById('doc-status-input').value = doc.status;
+
+            document.getElementById('doc-form-title').innerHTML = '<i class="fa-solid fa-pen-to-square text-corporate-accent"></i> Editar Anteproyecto';
+            document.getElementById('btn-cancel-doc-edit').classList.remove('hidden');
+        }
+
+        function deleteDocument(docId) {
+            const docSubmissions = submissions.filter(s => s.docId === docId);
+            if (docSubmissions.length > 0) {
+                if (!confirm(`El anteproyecto tiene ${docSubmissions.length} observaciones registradas. ¿Está seguro de eliminarlo junto a sus registros?`)) {
+                    return;
+                }
+                submissions = submissions.filter(s => s.docId !== docId);
+                localStorage.setItem('fondonorma_submissions', JSON.stringify(submissions));
+            } else if (!confirm('¿Desea eliminar este anteproyecto?')) {
+                return;
+            }
+
+            documents = documents.filter(d => d.id !== docId);
+            localStorage.setItem('fondonorma_docs', JSON.stringify(documents));
+
+            renderAdminDocsTable();
+            renderCitizenDocSelector();
+            renderAdminObservationsTable();
+            updateAdminBadge();
+            showToast("Eliminado", "Anteproyecto removido del sistema.", "success");
+        }
+
+        function renderAdminDocsTable() {
+            const tbody = document.getElementById('admin-docs-tbody');
+            tbody.innerHTML = '';
+            document.getElementById('doc-count-tag').innerText = `${documents.length} Documentos`;
+
+            documents.forEach(doc => {
+                const obsCount = submissions.filter(s => s.docId === doc.id).length;
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition";
+                tr.innerHTML = `
+                    <td class="p-3">
+                        <span class="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-corporate font-bold">${doc.code}</span>
+                        <div class="font-bold text-slate-800 text-xs mt-1">${doc.title}</div>
+                    </td>
+                    <td class="p-3 text-center">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${doc.status === 'Activo' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}">
+                            ${doc.status}
+                        </span>
+                    </td>
+                    <td class="p-3 text-center">
+                        <span class="bg-corporate/10 text-corporate font-bold px-2 py-0.5 rounded-full text-xs">${obsCount}</span>
+                    </td>
+                    <td class="p-3 text-center space-x-1">
+                        <button onclick="editDocument('${doc.id}')" class="bg-slate-100 hover:bg-slate-200 text-corporate p-1.5 rounded-lg transition" title="Editar anteproyecto">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button onclick="deleteDocument('${doc.id}')" class="bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 p-1.5 rounded-lg transition" title="Eliminar">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // ================= VISTA CIUDADANO (FORMULARIO) =================
+
+        function switchView(view) {
+            const btnCitizen = document.getElementById('btn-citizen');
+            const btnAdmin = document.getElementById('btn-admin');
+            const viewCitizen = document.getElementById('view-citizen');
+            const viewAdmin = document.getElementById('view-admin');
+
+            if (view === 'citizen') {
+                btnCitizen.className = "px-4 py-2 text-xs md:text-sm font-semibold rounded-lg transition-all flex items-center space-x-2 bg-corporate-accent text-white shadow";
+                btnAdmin.className = "px-4 py-2 text-xs md:text-sm font-semibold rounded-lg transition-all flex items-center space-x-2 text-slate-300 hover:text-white";
+                viewCitizen.classList.remove('hidden');
+                viewAdmin.classList.add('hidden');
+            } else {
+                btnAdmin.className = "px-4 py-2 text-xs md:text-sm font-semibold rounded-lg transition-all flex items-center space-x-2 bg-corporate-accent text-white shadow";
+                btnCitizen.className = "px-4 py-2 text-xs md:text-sm font-semibold rounded-lg transition-all flex items-center space-x-2 text-slate-300 hover:text-white";
+                viewAdmin.classList.remove('hidden');
+                viewCitizen.classList.add('hidden');
+                renderAdminDocsTable();
+                renderAdminObservationsTable();
+            }
+        }
+
+        function addObservationRow(data = {}) {
+            const tbody = document.getElementById('obs-tbody');
+            const emptyMsg = document.getElementById('empty-obs-message');
+            emptyMsg.classList.add('hidden');
+
+            const rowId = 'row_' + Date.now() + Math.random().toString(36).substr(2, 5);
+            const tr = document.createElement('tr');
+            tr.id = rowId;
+            tr.className = "hover:bg-slate-50 transition";
+
+            tr.innerHTML = `
+                <td class="p-2 border-b border-slate-200">
+                    <input type="text" name="apartado" required value="${data.apartado || ''}" placeholder="Ej. 4.2" class="w-full px-2 py-1 text-xs bg-slate-50 border border-slate-300 rounded focus:bg-white focus:ring-1 focus:ring-corporate-light">
+                </td>
+                <td class="p-2 border-b border-slate-200">
+                    <input type="text" name="pagina" required value="${data.pagina || ''}" placeholder="Ej. 12" class="w-full px-2 py-1 text-xs bg-slate-50 border border-slate-300 rounded focus:bg-white focus:ring-1 focus:ring-corporate-light">
+                </td>
+                <td class="p-2 border-b border-slate-200">
+                    <textarea name="original" required placeholder="Texto original..." rows="2" class="w-full px-2 py-1 text-xs bg-slate-50 border border-slate-300 rounded focus:bg-white focus:ring-1 focus:ring-corporate-light">${data.original || ''}</textarea>
+                </td>
+                <td class="p-2 border-b border-slate-200">
+                    <textarea name="propuesto" required placeholder="Texto propuesto..." rows="2" class="w-full px-2 py-1 text-xs bg-slate-50 border border-slate-300 rounded focus:bg-white focus:ring-1 focus:ring-corporate-light">${data.propuesto || ''}</textarea>
+                </td>
+                <td class="p-2 border-b border-slate-200">
+                    <textarea name="justificacion" required placeholder="Justificación técnica..." rows="2" class="w-full px-2 py-1 text-xs bg-slate-50 border border-slate-300 rounded focus:bg-white focus:ring-1 focus:ring-corporate-light">${data.justificacion || ''}</textarea>
+                </td>
+                <td class="p-2 border-b border-slate-200 text-center">
+                    <button type="button" onclick="removeObservationRow('${rowId}')" class="text-slate-400 hover:text-rose-600 p-1 rounded transition" title="Eliminar fila">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        }
+
+        function removeObservationRow(rowId) {
+            const tr = document.getElementById(rowId);
+            if (tr) tr.remove();
+            const tbody = document.getElementById('obs-tbody');
+            if (tbody.children.length === 0) {
+                document.getElementById('empty-obs-message').classList.remove('hidden');
+            }
+        }
+
+        function gatherFormData() {
+            const docObj = documents.find(d => d.id === currentActiveDocId) || { id: '', code: 'S/C', title: 'Norma General' };
+            
+            const issuer = {
+                name: document.getElementById('issuer-name').value.trim(),
+                id: document.getElementById('issuer-id').value.trim(),
+                profession: document.getElementById('issuer-profession').value.trim(),
+                email: document.getElementById('issuer-email').value.trim(),
+                phone: document.getElementById('issuer-phone').value.trim(),
+                org: document.getElementById('issuer-org').value.trim() || 'N/A',
+                cargo: document.getElementById('issuer-cargo').value.trim() || 'N/A',
+                date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString()
+            };
+
+            const rows = document.querySelectorAll('#obs-tbody tr');
+            const observations = [];
+
+            rows.forEach(row => {
+                const apartado = row.querySelector('[name="apartado"]').value.trim();
+                const pagina = row.querySelector('[name="pagina"]').value.trim();
+                const original = row.querySelector('[name="original"]').value.trim();
+                const propuesto = row.querySelector('[name="propuesto"]').value.trim();
+                const justificacion = row.querySelector('[name="justificacion"]').value.trim();
+
+                if (apartado || original || propuesto) {
+                    observations.push({ apartado, pagina, original, propuesto, justificacion });
+                }
+            });
+
+            return {
+                docId: docObj.id,
+                docCode: docObj.code,
+                docTitle: docObj.title,
+                issuer,
+                observations
+            };
+        }
+
+        function handleFormSubmit(event) {
+            event.preventDefault();
+            const formData = gatherFormData();
+
+            if (!formData.docId) {
+                showToast("Error", "No hay un anteproyecto normativo seleccionado.", "error");
+                return;
+            }
+
+            if (formData.observations.length === 0) {
+                showToast("Atención", "Debe incluir al menos una observación en la tabla.", "error");
+                return;
+            }
+
+            submissions.unshift(formData);
+            localStorage.setItem('fondonorma_submissions', JSON.stringify(submissions));
+
+            updateAdminBadge();
+            renderAdminObservationsTable();
+            renderAdminDocsTable();
+
+            showToast("¡Enviado con Éxito!", "Sus observaciones han sido consolidadas automáticamente.", "success");
+            previewFormalDocument(formData);
+        }
+
+        function previewFormalDocument(customData = null) {
+            const data = customData || gatherFormData();
+            
+            if (data.observations.length === 0 && !customData) {
+                showToast("Aviso", "Complete los campos y agregue observaciones para visualizar.", "error");
+                return;
+            }
+
+            document.getElementById('prev-doc-title').innerText = data.docTitle || '-';
+            document.getElementById('prev-doc-code').innerText = data.docCode || '-';
+            document.getElementById('prev-name').innerText = data.issuer.name || '-';
+            document.getElementById('prev-id').innerText = data.issuer.id || '-';
+            document.getElementById('prev-prof').innerText = data.issuer.profession || '-';
+            document.getElementById('prev-email').innerText = data.issuer.email || '-';
+            document.getElementById('prev-phone').innerText = data.issuer.phone || '-';
+            document.getElementById('prev-org').innerText = data.issuer.org || '-';
+            document.getElementById('prev-cargo').innerText = data.issuer.cargo || '-';
+            document.getElementById('preview-date').innerText = 'Fecha: ' + (data.issuer.date || new Date().toLocaleDateString());
+
+            const prevTbody = document.getElementById('prev-obs-tbody');
+            prevTbody.innerHTML = '';
+
+            data.observations.forEach(obs => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="p-2 border-r border-slate-200 font-mono">${obs.apartado}</td>
+                    <td class="p-2 border-r border-slate-200 font-mono">${obs.pagina}</td>
+                    <td class="p-2 border-r border-slate-200">${obs.original}</td>
+                    <td class="p-2 border-r border-slate-200 font-semibold text-corporate">${obs.propuesto}</td>
+                    <td class="p-2 text-slate-600">${obs.justificacion}</td>
+                `;
+                prevTbody.appendChild(tr);
+            });
+
+            document.getElementById('preview-modal').classList.remove('hidden');
+        }
+
+        function closePreviewModal() {
+            document.getElementById('preview-modal').classList.add('hidden');
+        }
+
+        // ================= DESCARGAS E INFORMES =================
+
+        function downloadFormPDF() {
+            const element = document.getElementById('printable-form-container');
+            const opt = {
+                margin: 10,
+                filename: 'NO-NOR-FOR-008_Formulario_Observaciones.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            showToast("Generando PDF", "Preparando archivo oficial...", "success");
+            html2pdf().from(element).set(opt).save();
+        }
+
+        function downloadFormWordSimulation() {
+            const data = gatherFormData();
+            let htmlContent = `
+                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                <head><meta charset='utf-8'><title>NO-NOR-FOR-008</title></head>
+                <body style="font-family: Arial, sans-serif; font-size: 11pt;">
+                    <h2 style="text-align: center; color: #1b3b6f;">FONDONORMA - COMITÉ DE NORMALIZACIÓN</h2>
+                    <h3 style="text-align: center;">FORMULARIO DE OBSERVACIONES (NO-NOR-FOR-008)</h3>
+                    <p><strong>Anteproyecto:</strong> ${data.docCode} - ${data.docTitle}</p>
+                    <hr/>
+                    <table border="1" cellpadding="5" cellspacing="0" style="width:100%; border-collapse: collapse;">
+                        <tr><th colspan="2" style="background:#1b3b6f; color:white;">DATOS DEL EMISOR</th></tr>
+                        <tr><td><strong>Nombre y Apellido:</strong></td><td>${data.issuer.name}</td></tr>
+                        <tr><td><strong>Cédula:</strong></td><td>${data.issuer.id}</td></tr>
+                        <tr><td><strong>Profesión:</strong></td><td>${data.issuer.profession}</td></tr>
+                        <tr><td><strong>Correo:</strong></td><td>${data.issuer.email}</td></tr>
+                        <tr><td><strong>Teléfono:</strong></td><td>${data.issuer.phone}</td></tr>
+                        <tr><td><strong>Organización:</strong></td><td>${data.issuer.org}</td></tr>
+                        <tr><td><strong>Cargo:</strong></td><td>${data.issuer.cargo}</td></tr>
+                    </table>
+                    <br/>
+                    <table border="1" cellpadding="5" cellspacing="0" style="width:100%; border-collapse: collapse; font-size: 10pt;">
+                        <tr style="background:#1b3b6f; color:white;">
+                            <th>Apartado</th><th>Página</th><th>Texto Original</th><th>Texto Propuesto</th><th>Justificación</th>
+                        </tr>
+            `;
+
+            data.observations.forEach(obs => {
+                htmlContent += `
+                    <tr>
+                        <td>${obs.apartado}</td>
+                        <td>${obs.pagina}</td>
+                        <td>${obs.original}</td>
+                        <td>${obs.propuesto}</td>
+                        <td>${obs.justificacion}</td>
+                    </tr>
+                `;
+            });
+
+            htmlContent += `</table></body></html>`;
+
+            const blob = new Blob(['\ufeff' + htmlContent], { type: 'application/msword' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `NO-NOR-FOR-008_${data.issuer.name.replace(/\s+/g, '_')}.doc`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            showToast("Descarga Exitosa", "Formato Word (.doc) generado.", "success");
+        }
+
+        // ================= TABLA DE OBSERVACIONES EN ADMIN =================
+
+        function updateAdminBadge() {
+            document.getElementById('badge-admin-count').innerText = submissions.length;
+        }
+
+        function renderAdminObservationsTable() {
+            const filterDocId = document.getElementById('admin-filter-doc').value;
+            const searchText = document.getElementById('admin-search').value.toLowerCase();
+            const tbody = document.getElementById('admin-tbody');
+            const emptyMsg = document.getElementById('empty-admin-message');
+            
+            // Actualizar Opciones del Filtro por Documento
+            const filterSelect = document.getElementById('admin-filter-doc');
+            const currentFilterVal = filterSelect.value;
+            filterSelect.innerHTML = '<option value="ALL">-- Mostrar Todos los Anteproyectos --</option>';
+            documents.forEach(doc => {
+                const opt = document.createElement('option');
+                opt.value = doc.id;
+                opt.innerText = `${doc.code} (${doc.title})`;
+                if (doc.id === currentFilterVal) opt.selected = true;
+                filterSelect.appendChild(opt);
+            });
+
+            tbody.innerHTML = '';
+
+            const filtered = submissions.filter(item => {
+                const matchesDoc = (filterDocId === 'ALL' || item.docId === filterDocId);
+                const matchesText = item.issuer.name.toLowerCase().includes(searchText) ||
+                                    item.issuer.id.toLowerCase().includes(searchText) ||
+                                    item.issuer.org.toLowerCase().includes(searchText);
+                return matchesDoc && matchesText;
+            });
+
+            // Estadísticas
+            document.getElementById('stat-total-issuers').innerText = filtered.length;
+            const totalObs = filtered.reduce((acc, curr) => acc + curr.observations.length, 0);
+            document.getElementById('stat-total-obs').innerText = totalObs;
+            const uniqueOrgs = new Set(filtered.map(s => s.issuer.org).filter(o => o && o !== 'N/A'));
+            document.getElementById('stat-total-orgs').innerText = uniqueOrgs.size;
+
+            if (filtered.length === 0) {
+                emptyMsg.classList.remove('hidden');
+                return;
+            }
+            emptyMsg.classList.add('hidden');
+
+            filtered.forEach((sub, index) => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition";
+                tr.innerHTML = `
+                    <td class="p-3">
+                        <span class="font-mono text-[10px] bg-slate-100 text-corporate font-bold px-1.5 py-0.5 rounded">${sub.docCode || 'N/A'}</span>
+                        <div class="text-[11px] text-slate-500 font-mono mt-1">${sub.issuer.date}</div>
+                    </td>
+                    <td class="p-3">
+                        <div class="font-bold text-slate-900">${sub.issuer.name}</div>
+                        <div class="text-[11px] text-slate-500">C.I: ${sub.issuer.id} &bull; ${sub.issuer.email}</div>
+                    </td>
+                    <td class="p-3">
+                        <div class="text-slate-800 font-medium">${sub.issuer.org}</div>
+                        <div class="text-[11px] text-slate-500">${sub.issuer.cargo}</div>
+                    </td>
+                    <td class="p-3 text-center">
+                        <span class="bg-corporate/10 text-corporate font-bold px-2 py-0.5 rounded-full text-xs">${sub.observations.length}</span>
+                    </td>
+                    <td class="p-3 text-center space-x-1">
+                        <button onclick="previewFormalDocument(submissions[${index}])" class="bg-slate-100 hover:bg-slate-200 text-corporate p-1.5 rounded-lg transition" title="Ver Formulario Completo">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                        <button onclick="deleteSubmission(${index})" class="bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 p-1.5 rounded-lg transition" title="Eliminar">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function deleteSubmission(index) {
+            if (confirm('¿Eliminar esta observación del consolidado?')) {
+                submissions.splice(index, 1);
+                localStorage.setItem('fondonorma_submissions', JSON.stringify(submissions));
+                updateAdminBadge();
+                renderAdminObservationsTable();
+                showToast("Registro Eliminado", "La observación ha sido removida.", "success");
+            }
+        }
+
+        function exportAllToExcel() {
+            if (submissions.length === 0) {
+                showToast("Aviso", "No hay datos para exportar.", "error");
+                return;
+            }
+
+            const filterDocId = document.getElementById('admin-filter-doc').value;
+            const targetSubs = submissions.filter(s => filterDocId === 'ALL' || s.docId === filterDocId);
+
+            let flatData = [];
+            targetSubs.forEach(sub => {
+                sub.observations.forEach(obs => {
+                    flatData.push({
+                        "Código Anteproyecto": sub.docCode,
+                        "Título Anteproyecto": sub.docTitle,
+                        "Fecha Envío": sub.issuer.date,
+                        "Nombre y Apellido": sub.issuer.name,
+                        "Cédula": sub.issuer.id,
+                        "Profesión": sub.issuer.profession,
+                        "Correo": sub.issuer.email,
+                        "Teléfono": sub.issuer.phone,
+                        "Organización": sub.issuer.org,
+                        "Cargo": sub.issuer.cargo,
+                        "Apartado": obs.apartado,
+                        "Página": obs.pagina,
+                        "Texto Original": obs.original,
+                        "Texto Propuesto": obs.propuesto,
+                        "Justificación": obs.justificacion
+                    });
+                });
+            });
+
+            const worksheet = XLSX.utils.json_to_sheet(flatData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Observaciones");
+            XLSX.writeFile(workbook, "Consolidado_Observaciones_NO-NOR-FOR-008.xlsx");
+            showToast("Excel Exportado", "Se generó la planilla Excel consolidada.", "success");
+        }
+
+        function exportAllToPDF() {
+            if (submissions.length === 0) {
+                showToast("Aviso", "No hay datos para exportar.", "error");
+                return;
+            }
+
+            const filterDocId = document.getElementById('admin-filter-doc').value;
+            const targetSubs = submissions.filter(s => filterDocId === 'ALL' || s.docId === filterDocId);
+
+            let reportHTML = `
+                <div style="padding: 20px; font-family: Arial, sans-serif; color: #1e293b;">
+                    <h2 style="text-align: center; color: #1b3b6f;">REPORTE CONSOLIDADO DE CONSULTA PÚBLICA</h2>
+                    <h4 style="text-align: center; color: #f97316;">Estándar NO-NOR-FOR-008</h4>
+                    <p style="font-size: 10px; text-align: right;">Fecha de informe: ${new Date().toLocaleDateString()}</p>
+                    <hr/>
+            `;
+
+            targetSubs.forEach((sub, idx) => {
+                reportHTML += `
+                    <div style="margin-bottom: 20px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; background: #f8fafc;">
+                        <h4 style="margin: 0 0 3px 0; color: #1b3b6f; font-size: 11px;">[${sub.docCode}] ${sub.docTitle}</h4>
+                        <p style="margin: 0 0 6px 0; font-size: 10px; color: #475569;">
+                            Emisor #${idx+1}: <strong>${sub.issuer.name}</strong> (CI: ${sub.issuer.id}) &bull; Org: ${sub.issuer.org}
+                        </p>
+                        <table border="1" cellpadding="4" cellspacing="0" style="width: 100%; border-collapse: collapse; font-size: 9px; background: white;">
+                            <tr style="background: #1b3b6f; color: white;">
+                                <th>Apartado</th><th>Pág</th><th>Texto Original</th><th>Texto Propuesto</th><th>Justificación</th>
+                            </tr>
+                `;
+                sub.observations.forEach(obs => {
+                    reportHTML += `
+                        <tr>
+                            <td>${obs.apartado}</td>
+                            <td>${obs.pagina}</td>
+                            <td>${obs.original}</td>
+                            <td>${obs.propuesto}</td>
+                            <td>${obs.justificacion}</td>
+                        </tr>
+                    `;
+                });
+                reportHTML += `</table></div>`;
+            });
+
+            reportHTML += `</div>`;
+
+            const opt = {
+                margin: 10,
+                filename: 'Reporte_Consolidado_Observaciones.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            showToast("Generando PDF", "Compilando documento...", "success");
+            html2pdf().from(reportHTML).set(opt).save();
+        }
+
+        // Sistema de Utilidades y Feedback
+        function resetCitizenForm() {
+            document.getElementById('submission-form').reset();
+            document.getElementById('obs-tbody').innerHTML = '';
+            addObservationRow();
+            showToast("Formulario Limpio", "Los campos han sido reiniciados.", "success");
+        }
+
+        function showToast(title, message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastTitle = document.getElementById('toast-title');
+            const toastMsg = document.getElementById('toast-msg');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastTitle.innerText = title;
+            toastMsg.innerText = message;
+
+            if (type === 'success') {
+                toastIcon.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-500"></i>';
+                toast.style.borderLeftColor = '#10b981';
+            } else {
+                toastIcon.innerHTML = '<i class="fa-solid fa-circle-exclamation text-rose-500"></i>';
+                toast.style.borderLeftColor = '#f43f5e';
+            }
+
+            toast.classList.remove('translate-y-32', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-32', 'opacity-0');
+            }, 4000);
+        }
+    </script>
+</body>
+</html>
